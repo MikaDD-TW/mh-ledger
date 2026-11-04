@@ -1,0 +1,14 @@
+{
+  "name": "mh-ledger",
+  "private": true,
+  "description": "MH 記帳本：Google 試算表後端的記帳網頁 App（PWA）",
+  "scripts": {
+    "test": "node tests/backend.test.js && node tests/e2e.js",
+    "test:backend": "node tests/backend.test.js",
+    "test:e2e": "node tests/e2e.js",
+    "dev": "node tests/server.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

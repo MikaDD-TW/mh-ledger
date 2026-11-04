@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MH 記帳本</title>
+<meta name="description" content="M 和 H 的共用記帳本">
+<meta name="theme-color" content="#ECEFF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#10141A" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="記帳本">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Huninn&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a pocket ledger. Entry slip first; the month's budget bars and the day-grouped lines beside it
+   on desktop, below it on phones; tin settlement and LINE import at the end. */
+:root{
+  --bg:#ECEFF3; --surface:#FFFFFF; --chip:#E3E8EE; --ink:#17202B; --muted:#5E6A79; --line:#D3D9E1;
+  --accent:#2747A6; --accent-ink:#FFFFFF; --accent-soft:#E2E8F8;
+  --m:#0B7A6E; --m-soft:#DCF0EC; --h:#B0442A; --h-soft:#F7E3DC;
+  --cash:#8A5A00; --cash-soft:#F5EAD2; --card:#3B5476; --card-soft:#E0E7F0;
+  --ok:#1C7C47; --ok-soft:#DDF1E5; --warn:#A86400; --danger:#B42318; --danger-soft:#FBE4E1;
+  --shadow:0 1px 2px rgba(20,30,50,.06),0 6px 20px rgba(20,30,50,.06);
+  --f-display:"Huninn","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --f-body:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei","Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,"PingFang TC","Noto Sans TC",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#10141A; --surface:#181D25; --chip:#232A35; --ink:#E6EAF0; --muted:#9AA5B4; --line:#2B323D;
+  --accent:#93ABF5; --accent-ink:#0D1630; --accent-soft:#232D4A;
+  --m:#56C8B8; --m-soft:#14332F; --h:#F0937A; --h-soft:#3A231C;
+  --cash:#E4B75E; --cash-soft:#33291A; --card:#AFC0DA; --card-soft:#222B38;
+  --ok:#5FD08E; --ok-soft:#163325; --warn:#F0B44C; --danger:#FF8B7B; --danger-soft:#3D1F1C;
+  --shadow:none; color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:default}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1100px;margin:0 auto;padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:calc(40px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-family:var(--f-display);font-weight:400;font-size:27px;letter-spacing:.03em;margin:0;line-height:1.2}
+h2{font-family:var(--f-display);font-weight:400;font-size:18px;margin:0;letter-spacing:.02em}
+.top-right{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.sync-time{font-family:var(--f-mono);font-size:12px}
+.lab{display:block;font-size:12px;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+.lab small{letter-spacing:0;font-size:12px}
+.note{font-size:12px;color:var(--muted)}
+
+.grid{display:flex;flex-direction:column;gap:20px}
+.col{display:contents}
+@media (min-width:900px){
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+  .col{display:flex;flex-direction:column;gap:20px;min-width:0}
+}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:12px;margin-bottom:14px;font-size:14px;background:var(--cash-soft);color:var(--ink)}
+.banner.bad{background:var(--danger-soft)}
+.banner button{border:0;border-radius:9px;background:var(--accent);color:var(--accent-ink);padding:6px 12px;font-weight:600}
+
+/* entry slip */
+.slip{display:flex;flex-direction:column;gap:16px}
+.slip.editing{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.edit-flag{font-size:13px;color:var(--accent);font-weight:600;margin:-4px 0 -6px}
+.date-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.icon-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:18px;line-height:1;display:grid;place-items:center;padding:0}
+.icon-btn:disabled{opacity:.35}
+.date-label{position:relative;display:flex;align-items:baseline;gap:8px;padding:6px 10px;border-radius:10px;min-height:38px;cursor:pointer}
+.date-label:hover{background:var(--chip)}
+.date-main{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.date-wk{font-size:14px;color:var(--muted)}
+.date-label input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0}
+.tag{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.link-btn{border:0;background:none;color:var(--accent);font-size:13px;padding:6px 4px;margin-left:auto}
+.text-in{width:100%;height:48px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;font-size:17px}
+.text-in:focus,textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.hint{margin:6px 0 0;font-size:12px;color:var(--warn)}
+.picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pick{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:14px;display:inline-flex;gap:6px;align-items:baseline}
+.pick:hover{border-color:var(--accent)}
+.pick span{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:end}
+.amt-box{display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;height:52px;padding:0 14px;background:var(--surface)}
+.amt-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.amt-box span{font-family:var(--f-mono);color:var(--muted);font-size:18px;margin-right:6px}
+.amt-box input{border:0;outline:none;background:transparent;width:100%;min-width:0;font-family:var(--f-mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;background:var(--chip);border-radius:12px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;border-radius:9px;padding:0 16px;min-height:44px;color:var(--muted);font-size:15px;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+#paySeg button[data-v="現金"][aria-pressed="true"]{color:var(--cash);background:var(--cash-soft)}
+#paySeg button[data-v="刷卡"][aria-pressed="true"]{color:var(--card);background:var(--card-soft)}
+.seg button[data-v="M"][aria-pressed="true"]{color:var(--m);background:var(--m-soft)}
+.seg button[data-v="H"][aria-pressed="true"]{color:var(--h);background:var(--h-soft)}
+.seg.small button{min-height:32px;padding:0 12px;font-size:14px}
+.cats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.cats button{border:1px solid var(--line);background:var(--surface);border-radius:10px;min-height:44px;font-size:15px;padding:0}
+.cats button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.err{margin:-4px 0 0;color:var(--danger);font-size:13px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.primary{flex:1;height:50px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-size:16px;font-weight:600;letter-spacing:.04em;padding:0 18px}
+.primary:disabled{opacity:.4}
+.ghost{height:50px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0 16px}
+
+/* month summary */
+.sum-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.sum-head h2{font-size:20px;min-width:8.5em;text-align:center}
+.sum-head .note{margin-left:auto}
+.buds{display:flex;flex-direction:column;gap:12px}
+.bud-top,.bud-sub{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.bud-name{font-size:15px;font-weight:600}
+.bud-left{font-family:var(--f-mono);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.bud-left.over{color:var(--danger)}
+.bud-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:4px}
+.bar{height:8px;border-radius:99px;background:var(--chip);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+.bar i.warn{background:var(--warn)} .bar i.over{background:var(--danger)}
+.sum-total{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.sum-total b{font-family:var(--f-mono)}
+.stats{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;margin-top:10px}
+.stat{padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--muted);font-variant-numeric:tabular-nums}
+.stat b{color:var(--ink);font-weight:600}
+.stat.m{background:var(--m-soft);color:var(--m)} .stat.h{background:var(--h-soft);color:var(--h)}
+.stat.m b{color:var(--m)} .stat.h b{color:var(--h)}
+.skeleton{color:var(--muted);font-size:14px;padding:8px 0}
+
+/* lists */
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.day + .day{margin-top:10px}
+.day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;background:var(--chip);font-size:13px;color:var(--muted)}
+.day-head strong{font-family:var(--f-mono);color:var(--ink);font-size:14px;margin-right:6px}
+.day-head .sum{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.entry{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:8px;padding:10px 4px 10px 14px;border-top:1px solid var(--line)}
+.day-head + .entry{border-top:0}
+.entry-main{border:0;background:none;text-align:left;padding:0;min-width:0;display:flex;flex-direction:column;gap:3px}
+.entry-desc{font-size:16px;overflow-wrap:anywhere}
+.meta{display:flex;gap:5px;flex-wrap:wrap;font-size:12px}
+.pill{padding:1px 7px;border-radius:6px;background:var(--chip);color:var(--muted)}
+.pill.cash{background:var(--cash-soft);color:var(--cash)} .pill.card{background:var(--card-soft);color:var(--card)}
+.pill.M{background:var(--m-soft);color:var(--m);font-weight:600} .pill.H{background:var(--h-soft);color:var(--h);font-weight:600}
+.pill.sync{background:transparent;color:var(--warn);padding:1px 0}
+.entry-amt{font-family:var(--f-mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.tin{border:1px solid var(--line);background:var(--surface);border-radius:8px;font-size:12px;padding:4px 7px;color:var(--muted);white-space:nowrap;min-height:30px}
+.tin[aria-pressed="true"]{background:var(--ok-soft);border-color:transparent;color:var(--ok);font-weight:600}
+.tin:disabled{opacity:.4}
+.del{width:34px;height:34px;border:0;background:none;color:var(--muted);border-radius:8px;font-size:18px;padding:0}
+.del:hover{background:var(--chip);color:var(--danger)}
+.entry.is-editing{background:var(--accent-soft)}
+.entry.dim{opacity:.45}
+.empty{border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--muted);font-size:14px;text-align:center}
+@media (prefers-reduced-motion:no-preference){.entry.flash{animation:flash 1.2s ease-out}@keyframes flash{from{background:var(--accent-soft)}to{background:transparent}}}
+
+/* settlement */
+.settle-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.settle-row:first-child{border-top:0}
+.settle-row .who{font-size:15px}
+.settle-row .cnt{font-size:12px;color:var(--muted);margin-left:6px}
+.settle-row .amt{font-family:var(--f-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.small-btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:6px 12px;font-size:14px}
+.small-btn.go{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.confirm{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px;background:var(--accent-soft);padding:8px 10px;border-radius:10px}
+.all-done{color:var(--ok);font-size:14px;padding:6px 0}
+
+/* import */
+details.card > summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+details.card > summary::-webkit-details-marker{display:none}
+details.card > summary::after{content:"＋";margin-left:auto;color:var(--muted)}
+details[open].card > summary::after{content:"－"}
+.imp-body{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+textarea{width:100%;min-height:150px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-family:var(--f-mono);font-size:14px;line-height:1.6;resize:vertical}
+.imp-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.imp-item{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-family:var(--f-mono);font-size:14px}
+.imp-item:first-child{border-top:0}
+.imp-item input{width:18px;height:18px;flex:none}
+.imp-item .dup{font-family:var(--f-body);font-size:12px;color:var(--warn);margin-left:auto;white-space:nowrap}
+.imp-err{font-size:13px;color:var(--danger);margin:0;padding-left:18px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast button{border:0;background:none;color:var(--bg);font-weight:700;text-decoration:underline;padding:4px}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:420px){.seg button{padding:0 12px}.cats button{font-size:14px}.entry{gap:6px}}
+
+/* ===== PWA：主畫面 App 用 ===== */
+html{-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation}
+input,textarea,select{font-size:16px} /* 16px 以上 iPhone 點輸入框才不會放大畫面 */
+.wrap{padding-top:calc(env(safe-area-inset-top,0px) + 14px)}
+.tabbar{display:none}
+.banner .x{background:transparent;color:var(--accent);padding:6px 4px;font-weight:600;margin-left:auto}
+.banner svg{width:16px;height:16px;vertical-align:-3px}
+.setup{max-width:560px;margin:6vh auto 0;display:flex;flex-direction:column;gap:12px}
+.setup h2{font-size:22px}
+.setup p{margin:0}
+.setup ol{margin:0;padding-left:22px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
+.setup textarea{min-height:96px;font-size:14px;word-break:break-all}
+body.setup-mode #app,body.setup-mode .tabbar,body.setup-mode #banner,body.setup-mode .top-right{display:none!important}
+#installTip{font-size:13px;padding:8px 12px;gap:6px 10px}
+#installTip button{padding:4px 10px}
+body:not(.setup-mode) #setup{display:none}
+.more-list{display:flex;flex-direction:column}
+.more-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:15px;min-height:48px}
+.more-row:first-child{border-top:0}
+.more-row .v{color:var(--muted);font-size:13px;text-align:right;overflow-wrap:anywhere}
+.more-row .v.okc{color:var(--ok)} .more-row .v.badc{color:var(--danger)}
+.more-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ver{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:center;margin:14px 0 0}
+@media (max-width:899px){
+  body.tabs [data-tab]:not(.on){display:none!important}
+  body.tabs .wrap{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+  body.tabs .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);
+    background:color-mix(in srgb,var(--surface) 88%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(16px);backdrop-filter:saturate(1.6) blur(16px);
+    border-top:1px solid var(--line);padding:4px max(6px,env(safe-area-inset-left,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-right,0px))}
+  .tabbar button{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 0;color:var(--muted);font-size:11px;letter-spacing:.04em;position:relative;-webkit-user-select:none;user-select:none}
+  .tabbar svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .tabbar button[aria-current="page"]{color:var(--accent);font-weight:600}
+  .tabbar button[aria-current="page"] svg{stroke-width:2.1}
+  .tabbar .badge{position:absolute;top:3px;left:calc(50% + 7px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-family:var(--f-mono);font-size:11px;font-weight:600;line-height:18px;text-align:center}
+  body.tabs .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .top{margin-bottom:12px}
+}
+@media (display-mode: standalone){ h1{font-size:24px} }
+</style>
+</head>
+<body class="tabs">
+<div class="wrap">
+  <header class="top">
+    <h1>MH 記帳本</h1>
+    <div class="top-right">
+      <span class="sync-time" id="syncTime"></span>
+      <button type="button" class="icon-btn" id="reload" aria-label="重新讀取">↻</button>
+      <span>我是</span>
+      <div class="seg small" id="meSeg" role="radiogroup" aria-label="我是誰">
+        <button type="button" data-v="M" aria-pressed="false">M</button>
+        <button type="button" data-v="H" aria-pressed="false">H</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner bad" id="badLink" hidden><span>通行碼不對，試算表不讓這支手機讀寫。請用試算表「設定」分頁 B12（M）／B13（H）的新連結重新打開。</span><button type="button" id="badFix">重新設定</button></div>
+  <div class="banner" id="banner" hidden><span id="bannerMsg"></span><button type="button" id="bannerBtn" hidden>重試</button></div>
+
+  <section class="card setup" id="setup" aria-labelledby="setupTitle">
+    <h2 id="setupTitle">第一次使用</h2>
+    <p>打開試算表「設定」分頁，用<b>你自己的新 App 連結</b>開啟這個頁面就會自動設定好：B12 是 M 的，B13 是 H 的。</p>
+    <ol>
+      <li>iPhone 請用 Safari 開那條連結。</li>
+      <li>畫面出來後，點分享 → 「加入主畫面」。</li>
+      <li>之後從桌面圖示點開就好。</li>
+    </ol>
+    <p class="note">已經加到主畫面卻停在這一頁，或是要換連結：把整條連結貼在下面。</p>
+    <textarea id="setupIn" placeholder="https://mikadd-tw.github.io/mh-ledger/?me=M&amp;k=…&amp;u=…" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+    <p class="err" id="setupErr" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" class="primary" id="setupGo">開始使用</button>
+      <button type="button" class="ghost" id="setupCancel" hidden>取消</button>
+    </div>
+  </section>
+
+  <div class="grid" id="app">
+    <div class="col left">
+      <div class="banner" id="installTip" data-tab="add" style="order:0;margin:0" hidden><span id="installMsg"></span><button type="button" id="installGo" hidden>安裝</button><button type="button" class="x" id="installX">知道了</button></div>
+      <form id="entry" class="card slip" data-tab="add" style="order:1" novalidate autocomplete="off">
+        <p class="edit-flag" id="editFlag" hidden>正在修改這筆</p>
+        <div class="date-row">
+          <button type="button" class="icon-btn" id="dPrev" aria-label="前一天">‹</button>
+          <label class="date-label" id="dLabel">
+            <span class="date-main" id="dText"></span><span class="date-wk" id="dWk"></span><span class="tag" id="dTag"></span>
+            <input type="date" id="dInput" aria-label="選日期">
+          </label>
+          <button type="button" class="icon-btn" id="dNext" aria-label="後一天">›</button>
+          <button type="button" class="link-btn" id="dToday" hidden>回到今天</button>
+        </div>
+        <div>
+          <label class="lab" for="desc">用途</label>
+          <input class="text-in" id="desc" enterkeyhint="next" placeholder="例如：午餐便當">
+          <p class="hint" id="descHint" hidden>空白會自動拿掉</p>
+          <div class="picks" id="picks" aria-label="常用項目"></div>
+        </div>
+        <div class="row2">
+          <div>
+            <label class="lab" for="amt">金額</label>
+            <div class="amt-box"><span>$</span><input id="amt" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" placeholder="0"></div>
+          </div>
+          <div>
+            <span class="lab">付款</span>
+            <div class="seg" id="paySeg" role="radiogroup" aria-label="付款方式">
+              <button type="button" data-v="現金" aria-pressed="false">現金</button>
+              <button type="button" data-v="刷卡" aria-pressed="false">刷卡</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <span class="lab">分類</span>
+          <div class="cats" id="catSeg" role="radiogroup" aria-label="分類">
+            <button type="button" data-v="伙食" aria-pressed="false">伙食</button>
+            <button type="button" data-v="休閒" aria-pressed="false">休閒</button>
+            <button type="button" data-v="教育" aria-pressed="false">教育</button>
+            <button type="button" data-v="交通" aria-pressed="false">交通</button>
+            <button type="button" data-v="雜費" aria-pressed="false">雜費</button>
+          </div>
+        </div>
+        <div id="whoField">
+          <span class="lab">誰出的現金 <small>（錢要交給誰）</small></span>
+          <div class="seg" id="whoSeg" role="radiogroup" aria-label="誰出的現金">
+            <button type="button" data-v="M" aria-pressed="false">M</button>
+            <button type="button" data-v="H" aria-pressed="false">H</button>
+            <button type="button" data-v="" aria-pressed="false">不填</button>
+          </div>
+        </div>
+        <p class="err" id="err" role="alert" hidden></p>
+        <div class="actions">
+          <button type="submit" class="primary" id="submitBtn">加入</button>
+          <button type="button" class="ghost" id="cancelEdit" hidden>取消</button>
+        </div>
+      </form>
+
+      <section class="card" id="settleCard" data-tab="tin" style="order:4" aria-labelledby="stTitle">
+        <div class="sec-head"><h2 id="stTitle">鐵盒結清</h2><span class="note">還沒從鐵盒拿錢的帳，不分月份</span></div>
+        <div id="settleBody"><p class="skeleton">讀取中…</p></div>
+      </section>
+
+      <details class="card" id="impCard" data-tab="more" style="order:5">
+        <summary><h2>從 LINE 文字匯入</h2><span class="note">LINE 裡還沒記進來的帳，整段貼上</span></summary>
+        <div class="imp-body">
+          <textarea id="impText" placeholder="10/21&#10;早餐 55 現金 伙食 H&#10;飲料 60 刷卡 休閒"></textarea>
+          <div class="actions"><button type="button" class="ghost" id="impParse">檢查內容</button></div>
+          <div id="impPrev"></div>
+        </div>
+      </details>
+
+      <section class="card" id="moreCard" data-tab="more" style="order:6" aria-labelledby="moreTitle">
+        <div class="sec-head"><h2 id="moreTitle">這支手機</h2></div>
+        <div class="more-list">
+          <div class="more-row"><span>試算表</span><span class="v" id="mConn"></span></div>
+          <div class="more-row"><span>還沒送進試算表的帳</span><span class="v" id="mQueue"></span></div>
+          <div class="more-row"><span>主畫面 App</span><span class="v" id="mInstall"></span></div>
+        </div>
+        <div class="more-btns">
+          <button type="button" class="small-btn" id="mReload">重新讀取</button>
+          <button type="button" class="small-btn" id="mSetup">換連結</button>
+        </div>
+        <p class="ver" id="ver"></p>
+      </section>
+    </div>
+
+    <div class="col right">
+      <section class="card" id="sumCard" data-tab="month" style="order:2" aria-labelledby="mTitle">
+        <div class="sum-head">
+          <button type="button" class="icon-btn" id="mPrev" aria-label="上個月">‹</button>
+          <h2 id="mTitle"></h2>
+          <button type="button" class="icon-btn" id="mNext" aria-label="下個月">›</button>
+          <span class="note" id="mDays"></span>
+        </div>
+        <div id="sumBody"><p class="skeleton">讀取中…</p></div>
+      </section>
+
+      <section id="listSec" data-tab="add" style="order:3" aria-labelledby="lTitle">
+        <div class="sec-head">
+          <h2 id="lTitle">明細</h2>
+          <div class="seg small" id="filtSeg" role="radiogroup" aria-label="篩選">
+            <button type="button" data-v="all" aria-pressed="true">全部</button>
+            <button type="button" data-v="open" aria-pressed="false">未結清</button>
+          </div>
+        </div>
+        <div id="list"><p class="skeleton">讀取中…</p></div>
+      </section>
+    </div>
+  </div>
+</div>
+<nav class="tabbar" id="tabbar" aria-label="分頁">
+  <button type="button" data-t="add" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg><span>記帳</span></button>
+  <button type="button" data-t="month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></svg><span>本月</span></button>
+  <button type="button" data-t="tin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5h17v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M2.5 6.5a1 1 0 0 1 1-1h17a1 1 0 0 1 1 1v3h-19z"/><path d="M10 13.5h4"/></svg><span>鐵盒</span><b class="badge" id="tinBadge" hidden></b></button>
+  <button type="button" data-t="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></svg><span>更多</span></button>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastMsg"></span><button type="button" id="toastUndo" hidden>復原</button></div>
+
+<script>
+(function () {
+  var APP_VERSION = '2026.11.04';
+  var CFGKEY = 'mh-pwa-cfg-v1', CACHEKEY = 'mh-pwa-cache-v1', TIPKEY = 'mh-pwa-tip-off';
+  var CATS = ['伙食', '休閒', '教育', '交通', '雜費'];
+  var QKEY = 'mh-app-queue-v1', MEKEY = 'mh-app-me';
+  var WK = '日一二三四五六';
+  var $ = function (id) { return document.getElementById(id); };
+  var LS = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+
+  // ---------- 連結設定：?me=M&k=通行碼&u=Apps Script 的 /exec 網址 ----------
+  // 網址列上的設定不拿掉：iPhone「加入主畫面」會記住目前網址，主畫面 App 第一次打開時才讀得到。
+  function parseCfg(str) {
+    str = String(str || '').trim();
+    var i = str.search(/[?#]/);
+    if (i < 0) return null;
+    var p = new URLSearchParams(str.slice(i + 1).replace(/#/g, '&'));
+    var u = (p.get('u') || '').trim(), k = (p.get('k') || '').trim(), who = (p.get('me') || '').trim().toUpperCase();
+    if (!k || !/^(https:\/\/script\.google\.com\/|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/)/.test(u)) return null;
+    return { u: u, k: k, me: who === 'M' || who === 'H' ? who : '' };
+  }
+  function cfgUrl(c) {
+    return location.pathname + '?me=' + encodeURIComponent(c.me) + '&k=' + encodeURIComponent(c.k) + '&u=' + encodeURIComponent(c.u);
+  }
+  var CFG = (function () {
+    var fromUrl = parseCfg(location.search + location.hash), saved = LS.get(CFGKEY, null);
+    if (saved && !(saved.u && saved.k)) saved = null;
+    if (fromUrl) {
+      if (saved && saved.u !== fromUrl.u) LS.del(CACHEKEY); // 換了一份試算表，舊的快取不能用
+      LS.set(CFGKEY, fromUrl);
+    }
+    var c = fromUrl || saved;
+    return c ? { ok: true, u: c.u, k: c.k, me: c.me } : { ok: false, none: true };
+  })();
+
+  // ---------- dates ----------
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var iso = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var parse = function (s) { var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  var md = function (s) { var d = parse(s); return (d.getMonth() + 1) + '/' + d.getDate(); };
+  var wk = function (s) { return '週' + WK[parse(s).getDay()]; };
+  var addDays = function (s, n) { var d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
+  var addMonths = function (m, n) { var y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + n; y += Math.floor(mo / 12); mo = ((mo % 12) + 12) % 12; return y + '-' + pad(mo + 1); };
+  var money = function (n) { return Math.round(n).toLocaleString('en-US'); };
+
+  // ---------- state ----------
+  var me = CFG.me || LS.get(MEKEY, '');
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (CFG.me) LS.set(MEKEY, CFG.me);
+  var S = {
+    entries: [], budgets: [], loaded: false, loading: false, loadErr: '',
+    today: iso(new Date()), since: '', month: '', queue: LS.get(QKEY, []),
+    syncing: false, syncErr: '', inflight: 0, lastLoad: 0, filter: 'all', imp: null, impErr: []
+  };
+  S.month = S.today.slice(0, 7);
+  var F = { date: S.today, desc: '', amt: '', pay: '現金', cat: '', who: me, catTouched: false, editing: null };
+  var saveQ = function () { LS.set(QKEY, S.queue); };
+  var newId = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
+  var strip = function (e) { return { id: e.id, date: e.date, desc: e.desc, amt: e.amt, pay: e.pay, cat: e.cat, who: e.who, settled: !!e.settled, by: e.by || '' }; };
+  var find = function (id) { for (var i = 0; i < S.entries.length; i++) if (S.entries[i].id === id) return S.entries[i]; return null; };
+  var lineOf = function (e) { var p = [e.desc, String(e.amt), e.pay, e.cat]; if (e.pay === '現金' && e.who) p.push(e.who); return p.join(' '); };
+  var clean = function (s) { return s.replace(/[\s　]+/g, ''); };
+
+  // ---------- server ----------
+  // Apps Script 網頁應用程式：POST 純文字 JSON（不會觸發 CORS 預檢），回應會轉址到 googleusercontent.com。
+  function call(action, payload) {
+    if (!CFG.ok) return Promise.reject(new Error('還沒設定連結'));
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 35000);
+    var done = function () { clearTimeout(timer); };
+    return fetch(CFG.u, {
+      method: 'POST', redirect: 'follow', cache: 'no-store', credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ k: CFG.k, action: action, p: payload || {} }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      if (!res.ok) throw new Error('試算表回應 ' + res.status);
+      return res.text();
+    }, function (e) {
+      if (e && e.name === 'AbortError') throw new Error('連線逾時');
+      throw new Error(navigator.onLine === false ? '沒有網路' : '連不上試算表');
+    }).then(function (txt) {
+      var j;
+      try { j = JSON.parse(txt); } catch (e) { throw new Error('Apps Script 回傳的不是資料，可能還沒部署含 Api.gs 的新版本'); }
+      if (!j || !j.ok) {
+        var msg = (j && j.error) || '試算表回報錯誤';
+        if (/通行碼/.test(msg)) { CFG.bad = true; renderStatus(); }
+        throw new Error(msg);
+      }
+      if (CFG.bad) { CFG.bad = false; }
+      return j.data;
+    }).then(function (v) { done(); return v; }, function (e) { done(); throw e; });
+  }
+
+  var cacheT;
+  function saveCache() {
+    if (!S.loaded || !CFG.ok) return;
+    clearTimeout(cacheT);
+    cacheT = setTimeout(function () {
+      var q = {}; S.queue.forEach(function (e) { q[e.id] = 1; });
+      LS.set(CACHEKEY, {
+        at: S.lastLoad || Date.now(), since: S.since, budgets: S.budgets,
+        entries: S.entries.filter(function (e) { return !q[e.id] && e._st !== 'removing'; }).map(strip)
+      });
+    }, 300);
+  }
+
+  function load() {
+    if (S.loading || !CFG.ok) return;
+    S.loading = true; renderStatus();
+    call('load').then(function (r) {
+      S.today = r.today || S.today;
+      S.since = r.since || '';
+      S.budgets = r.budgets || [];
+      var ids = {};
+      var server = (r.entries || []).map(function (e) { e._st = 'ok'; ids[e.id] = 1; return e; });
+      S.queue = S.queue.filter(function (e) { return !ids[e.id]; });
+      saveQ();
+      S.entries = server.concat(S.queue.map(function (e) { var c = strip(e); c._st = 'queued'; return c; }));
+      S.loaded = true; S.loadErr = ''; S.lastLoad = Date.now(); S.fromCache = false;
+    }).catch(function (e) {
+      S.loadErr = e.message;
+    }).then(function () {
+      S.loading = false; renderAll();
+      if (S.queue.length) flush();
+    });
+  }
+
+  function flush() {
+    if (S.syncing || !S.queue.length || !CFG.ok) return;
+    S.syncing = true;
+    var batch = S.queue.slice();
+    var ids = {}; batch.forEach(function (e) { ids[e.id] = 1; });
+    S.entries.forEach(function (e) { if (ids[e.id]) e._st = 'saving'; });
+    renderAll();
+    call('add', { entries: batch.map(strip) }).then(function () {
+      S.queue = S.queue.filter(function (e) { return !ids[e.id]; });
+      saveQ();
+      S.entries.forEach(function (e) { if (ids[e.id] && e._st === 'saving') e._st = 'ok'; });
+      S.syncErr = '';
+      S.lastLoad = S.lastLoad || Date.now();
+    }).catch(function (e) {
+      S.syncErr = e.message;
+      S.entries.forEach(function (x) { if (x._st === 'saving') x._st = 'queued'; });
+    }).then(function () {
+      S.syncing = false; renderAll();
+      if (S.queue.length && !S.syncErr) flush();
+    });
+  }
+
+  function track(p) { S.inflight++; return p.then(function (v) { S.inflight--; return v; }, function (e) { S.inflight--; throw e; }); }
+
+  // ---------- helpers ----------
+  function h(tag, attrs) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === 'class') el.className = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    });
+    for (var i = 2; i < arguments.length; i++) append(el, arguments[i]);
+    return el;
+  }
+  function append(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { append(el, x); }); return; }
+    el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  function setPressed(seg, v) { seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === v)); }); }
+  function byDate(list, desc) {
+    var g = {}, order = [];
+    list.forEach(function (e) { if (!g[e.date]) { g[e.date] = []; order.push(e.date); } g[e.date].push(e); });
+    order.sort(); if (desc) order.reverse();
+    return order.map(function (d) { return [d, g[d]]; });
+  }
+  function relTag(s) {
+    var diff = Math.round((parse(S.today) - parse(s)) / 864e5);
+    return diff === 0 ? '今天' : diff === 1 ? '昨天' : diff === 2 ? '前天' : diff < 0 ? '未來' : '';
+  }
+  function sum(list) { return list.reduce(function (a, e) { return a + e.amt; }, 0); }
+
+  // ---------- category guess / quick picks ----------
+  var GUESS = [
+    [/早餐|午餐|晚餐|宵夜|便當|全聯|好市多|家樂福|水果|食材|蛋白|豆漿|飯|麵|蛋$/, '伙食'],
+    [/停車|加油|捷運|高鐵|台鐵|火車|計程車|悠遊|etag|etc|過路|洗車|保養/i, '交通'],
+    [/咖啡|星巴克|電影|cama|唱歌|下午茶/i, '休閒'],
+    [/桌球|課|學費|書/, '教育']
+  ];
+  function guessCat(d) { for (var i = 0; i < GUESS.length; i++) if (GUESS[i][0].test(d)) return GUESS[i][1]; return ''; }
+  function pickStats() {
+    var m = {};
+    S.entries.forEach(function (e, i) {
+      var o = m[e.desc] || (m[e.desc] = { n: 0, combos: {}, last: '' });
+      o.n++;
+      var k = [e.amt, e.pay, e.cat, e.pay === '現金' ? e.who : ''].join('|');
+      var c = o.combos[k] || (o.combos[k] = { n: 0, at: '' });
+      c.n++; c.at = e.date + String(i).padStart(6, '0');
+      if (e.date > o.last) o.last = e.date;
+    });
+    return Object.keys(m).map(function (desc) {
+      var o = m[desc];
+      var best = Object.keys(o.combos).sort(function (a, b) { return o.combos[b].n - o.combos[a].n || (o.combos[b].at > o.combos[a].at ? 1 : -1); })[0].split('|');
+      return { desc: desc, n: o.n, last: o.last, amt: +best[0], pay: best[1], cat: best[2], who: best[3] };
+    });
+  }
+
+  // ---------- form ----------
+  var descEl = $('desc'), amtEl = $('amt');
+  function renderForm() {
+    $('dText').textContent = md(F.date);
+    $('dWk').textContent = wk(F.date);
+    var tag = relTag(F.date);
+    $('dTag').textContent = tag; $('dTag').hidden = !tag;
+    $('dToday').hidden = F.date === S.today;
+    $('dInput').value = F.date;
+    setPressed($('paySeg'), F.pay);
+    setPressed($('catSeg'), F.cat);
+    setPressed($('whoSeg'), F.who);
+    $('whoField').hidden = F.pay !== '現金';
+    $('descHint').hidden = !/[\s　]/.test(F.desc);
+    $('submitBtn').textContent = F.editing ? '更新這筆' : '加入';
+    $('cancelEdit').hidden = !F.editing;
+    $('editFlag').hidden = !F.editing;
+    $('entry').classList.toggle('editing', !!F.editing);
+    renderPicks();
+  }
+  function renderPicks() {
+    var box = $('picks'); box.textContent = '';
+    var q = clean(F.desc).toLowerCase();
+    var list = pickStats();
+    if (q) {
+      list = list.filter(function (p) { return p.desc.toLowerCase().indexOf(q) >= 0; })
+        .sort(function (a, b) { return (b.desc.toLowerCase() === q) - (a.desc.toLowerCase() === q) || b.n - a.n; }).slice(0, 8);
+    } else {
+      list = list.sort(function (a, b) { return b.n - a.n || (b.last > a.last ? 1 : -1); }).slice(0, 12);
+    }
+    list.forEach(function (p) {
+      box.append(h('button', { type: 'button', class: 'pick', title: lineOf(p), onclick: function () { applyPick(p); } }, p.desc, h('span', {}, p.amt)));
+    });
+  }
+  function applyPick(p) {
+    F.desc = p.desc; F.amt = String(p.amt); F.pay = p.pay; F.cat = p.cat; F.catTouched = true;
+    F.who = p.pay === '現金' ? p.who : me;
+    descEl.value = F.desc; amtEl.value = F.amt; hideErr(); renderForm();
+    amtEl.focus(); amtEl.select();
+  }
+  function showErr(m) { $('err').textContent = m; $('err').hidden = false; }
+  function hideErr() { $('err').hidden = true; }
+  function resetForm() {
+    F.desc = ''; F.amt = ''; F.cat = ''; F.catTouched = false; F.editing = null; F.who = me;
+    descEl.value = ''; amtEl.value = ''; hideErr();
+  }
+
+  descEl.addEventListener('input', function () {
+    F.desc = descEl.value;
+    if (!F.catTouched) F.cat = guessCat(clean(F.desc));
+    hideErr(); renderForm();
+  });
+  descEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); amtEl.focus(); } });
+  amtEl.addEventListener('input', function () {
+    var v = amtEl.value.replace(/[^\d]/g, '');
+    if (v !== amtEl.value) amtEl.value = v;
+    F.amt = v; hideErr();
+  });
+  $('paySeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; F.pay = b.dataset.v; renderForm(); });
+  $('catSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; F.cat = b.dataset.v; F.catTouched = true; hideErr(); renderForm(); });
+  $('whoSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; F.who = b.dataset.v; renderForm(); });
+  $('dPrev').addEventListener('click', function () { F.date = addDays(F.date, -1); renderForm(); });
+  $('dNext').addEventListener('click', function () { F.date = addDays(F.date, 1); renderForm(); });
+  $('dToday').addEventListener('click', function () { F.date = S.today; renderForm(); });
+  $('dInput').addEventListener('change', function (e) { if (e.target.value) { F.date = e.target.value; renderForm(); } });
+  $('dLabel').addEventListener('click', function (e) { try { $('dInput').showPicker(); e.preventDefault(); } catch (_) {} });
+  $('cancelEdit').addEventListener('click', function () { resetForm(); renderAll(); });
+
+  $('entry').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!CFG.ok) return;
+    if (!me) { showErr('先在右上角選你是 M 還是 H'); return; }
+    var desc = clean(F.desc);
+    if (!desc) { showErr('請先填用途'); descEl.focus(); return; }
+    if (F.amt === '' || isNaN(+F.amt)) { showErr('請填金額（只能是數字）'); amtEl.focus(); return; }
+    if (!F.cat) { showErr('請選一個分類'); return; }
+    var rec = { date: F.date, desc: desc, amt: +F.amt, pay: F.pay, cat: F.cat, who: F.pay === '現金' ? (F.who || '') : '' };
+
+    if (F.editing) {
+      var it = find(F.editing);
+      if (!it) { resetForm(); renderAll(); return; }
+      if (it._st === 'queued') {
+        Object.assign(it, rec);
+        S.queue.forEach(function (q) { if (q.id === it.id) Object.assign(q, rec); });
+        saveQ(); flush();
+      } else {
+        var before = strip(it);
+        Object.assign(it, rec); it._st = 'saving';
+        track(call('update', { entry: strip(it) })).then(function () {
+          it._st = 'ok'; toast('已更新'); renderAll();
+        }).catch(function (err) {
+          Object.assign(it, before); it._st = 'ok'; toast('沒有更新成功：' + err.message); renderAll();
+        });
+      }
+      S.month = rec.date.slice(0, 7);
+      var flashId = it.id;
+      resetForm(); renderAll(flashId);
+      return;
+    }
+    var n = Object.assign({ id: newId(), settled: false, by: me }, rec);
+    S.queue.push(n); saveQ();
+    S.entries.push(Object.assign(strip(n), { _st: 'queued' }));
+    S.month = n.date.slice(0, 7);
+    resetForm(); renderAll(n.id);
+    descEl.focus();
+    toast('已加入：' + n.desc + ' $' + money(n.amt));
+    flush();
+  });
+
+  function startEdit(id) {
+    var it = find(id); if (!it) return;
+    if (it._st === 'saving' || it._st === 'removing') { toast('這筆正在存，等一下再改'); return; }
+    Object.assign(F, { date: it.date, desc: it.desc, amt: String(it.amt), pay: it.pay, cat: it.cat, who: it.pay === '現金' ? it.who : me, catTouched: true, editing: id });
+    descEl.value = F.desc; amtEl.value = F.amt; hideErr();
+    renderAll();
+    $('entry').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(function () { descEl.focus({ preventScroll: true }); }, 300);
+  }
+
+  function removeEntry(id) {
+    var it = find(id); if (!it) return;
+    if (F.editing === id) resetForm();
+    var label = '「' + it.desc + ' ' + it.amt + '」';
+    if (it._st === 'queued') {
+      S.queue = S.queue.filter(function (q) { return q.id !== id; }); saveQ();
+      S.entries = S.entries.filter(function (x) { return x !== it; });
+      renderAll();
+      toast('已刪除' + label, function () { readd(it); });
+      return;
+    }
+    if (it._st !== 'ok') { toast('這筆正在存，等一下再刪'); return; }
+    it._st = 'removing'; renderAll();
+    track(call('remove', { id: id })).then(function () {
+      S.entries = S.entries.filter(function (x) { return x !== it; });
+      renderAll();
+      toast('已刪除' + label, function () { readd(it); });
+    }).catch(function (err) {
+      it._st = 'ok'; renderAll(); toast('沒有刪掉：' + err.message);
+    });
+  }
+  function readd(it) {
+    var n = strip(it);
+    S.queue.push(n); saveQ();
+    S.entries.push(Object.assign(strip(n), { _st: 'queued' }));
+    renderAll(n.id); flush();
+  }
+
+  function setSettled(list, value) {
+    var ids = list.map(function (e) { return e.id; });
+    list.forEach(function (e) { e.settled = value; });
+    renderAll();
+    return track(call('settle', { ids: ids, value: value })).catch(function (err) {
+      list.forEach(function (e) { e.settled = !value; });
+      renderAll(); toast('沒有存到：' + err.message);
+      throw err;
+    });
+  }
+
+  // ---------- month summary ----------
+  function budgetFor(month) { var b = null; S.budgets.forEach(function (x) { if (x.month <= month) b = x; }); return b; }
+  function monthEntries() { return S.entries.filter(function (e) { return e.date.slice(0, 7) === S.month && e._st !== 'removing'; }); }
+  function renderSummary() {
+    var y = S.month.slice(0, 4), m = +S.month.slice(5, 7);
+    $('mTitle').textContent = y + ' 年 ' + m + ' 月';
+    var cur = S.today.slice(0, 7);
+    var minM = S.since ? S.since.slice(0, 7) : S.month;
+    var maxM = cur; S.entries.forEach(function (e) { if (e.date.slice(0, 7) > maxM) maxM = e.date.slice(0, 7); });
+    $('mPrev').disabled = S.month <= minM;
+    $('mNext').disabled = S.month >= maxM;
+    var dim = new Date(+y, m, 0).getDate();
+    var left = S.month === cur ? dim - parse(S.today).getDate() + 1 : S.month < cur ? 0 : dim;
+    $('mDays').textContent = S.month === cur ? '含今天還有 ' + left + ' 天' : S.month < cur ? '已結束' : '';
+    var box = $('sumBody'); box.textContent = '';
+    if (!S.loaded) { box.append(h('p', { class: 'skeleton' }, S.loadErr ? '讀不到資料' : '讀取中…')); return; }
+    var list = monthEntries();
+    var b = budgetFor(S.month);
+    var buds = h('div', { class: 'buds' });
+    var totalBud = 0, totalSpent = 0;
+    CATS.forEach(function (c) {
+      var spent = sum(list.filter(function (e) { return e.cat === c; }));
+      var bud = b ? b[c] : 0;
+      totalBud += bud; totalSpent += spent;
+      var remain = bud - spent;
+      var pct = bud > 0 ? spent / bud : 0;
+      var cls = pct > 1 ? 'over' : pct >= 0.85 ? 'warn' : '';
+      var perDay = S.month === cur && c === '伙食' && remain > 0 && left > 0 ? '每天可用 $' + money(Math.floor(remain / left)) : '';
+      buds.append(h('div', { class: 'bud' },
+        h('div', { class: 'bud-top' }, h('span', { class: 'bud-name' }, c),
+          h('span', { class: 'bud-left' + (remain < 0 ? ' over' : '') }, bud ? (remain < 0 ? '超過 $' + money(-remain) : '剩 $' + money(remain)) : '$' + money(spent))),
+        bud ? h('div', { class: 'bar', role: 'img', 'aria-label': c + ' 用了 ' + Math.round(pct * 100) + '%' }, h('i', { class: cls, style: 'width:' + Math.min(100, pct * 100).toFixed(1) + '%' })) : null,
+        h('div', { class: 'bud-sub' }, h('span', {}, bud ? '已花 ' + money(spent) + ' / ' + money(bud) : '沒有設定額度'), h('span', {}, perDay))));
+    });
+    box.append(buds);
+    var tr = totalBud - totalSpent;
+    box.append(h('div', { class: 'sum-total' },
+      h('span', {}, '合計已花 ', h('b', {}, '$' + money(totalSpent)), totalBud ? ' / $' + money(totalBud) : ''),
+      totalBud ? h('span', {}, tr < 0 ? '超過 ' : '剩 ', h('b', {}, '$' + money(Math.abs(tr)))) : null));
+    var cash = list.filter(function (e) { return e.pay === '現金'; });
+    var st = h('div', { class: 'stats' },
+      h('span', { class: 'stat' }, '現金 $', h('b', {}, money(sum(cash)))),
+      h('span', { class: 'stat' }, '刷卡 $', h('b', {}, money(sum(list) - sum(cash)))),
+      h('span', { class: 'stat m' }, 'M 出 $', h('b', {}, money(sum(cash.filter(function (e) { return e.who === 'M'; }))))),
+      h('span', { class: 'stat h' }, 'H 出 $', h('b', {}, money(sum(cash.filter(function (e) { return e.who === 'H'; }))))));
+    box.append(st);
+    if (!b) box.append(h('p', { class: 'note' }, '這個月還沒有額度，可以在試算表的「額度」分頁加一列。'));
+  }
+  $('mPrev').addEventListener('click', function () { S.month = addMonths(S.month, -1); renderAll(); });
+  $('mNext').addEventListener('click', function () { S.month = addMonths(S.month, 1); renderAll(); });
+
+  // ---------- settlement ----------
+  var GROUPS = [
+    { key: 'M', label: 'M 出的現金', test: function (e) { return e.pay === '現金' && e.who === 'M'; } },
+    { key: 'H', label: 'H 出的現金', test: function (e) { return e.pay === '現金' && e.who === 'H'; } },
+    { key: 'none', label: '現金沒填人', test: function (e) { return e.pay === '現金' && !e.who; } },
+    { key: 'card', label: '刷卡', test: function (e) { return e.pay === '刷卡'; } }
+  ];
+  var confirmKey = '';
+  function renderSettle() {
+    var box = $('settleBody'); box.textContent = '';
+    if (!S.loaded) { box.append(h('p', { class: 'skeleton' }, S.loadErr ? '讀不到資料' : '讀取中…')); return; }
+    var any = false;
+    GROUPS.forEach(function (g) {
+      var open = S.entries.filter(function (e) { return !e.settled && e._st === 'ok' && g.test(e); });
+      var waiting = S.entries.filter(function (e) { return !e.settled && e._st !== 'ok' && e._st !== 'removing' && g.test(e); }).length;
+      if (!open.length) return;
+      any = true;
+      var total = sum(open);
+      var row = h('div', { class: 'settle-row' },
+        h('span', { class: 'who' }, g.label, h('span', { class: 'cnt' }, open.length + ' 筆' + (waiting ? '（另有 ' + waiting + ' 筆還在存）' : ''))),
+        h('span', { class: 'amt' }, '$' + money(total)),
+        h('button', { type: 'button', class: 'small-btn', onclick: function () { confirmKey = g.key; renderSettle(); } }, '結清'));
+      if (confirmKey === g.key) {
+        row.append(h('div', { class: 'confirm' },
+          h('span', {}, '把 ' + open.length + ' 筆、$' + money(total) + ' 標成已從鐵盒結清？'),
+          h('button', { type: 'button', class: 'small-btn go', onclick: function () {
+            confirmKey = '';
+            setSettled(open, true).then(function () { toast(g.label + ' ' + open.length + ' 筆已結清', function () { setSettled(open, false).catch(function () {}); }); }).catch(function () {});
+          } }, '確定'),
+          h('button', { type: 'button', class: 'small-btn', onclick: function () { confirmKey = ''; renderSettle(); } }, '取消')));
+      }
+      box.append(row);
+    });
+    if (!any) box.append(h('p', { class: 'all-done' }, '✓ 都結清了'));
+  }
+
+  // ---------- list ----------
+  function renderList(flashId) {
+    var box = $('list'); box.textContent = '';
+    setPressed($('filtSeg'), S.filter);
+    $('lTitle').textContent = (+S.month.slice(5, 7)) + ' 月明細';
+    if (!S.loaded && !S.entries.length) { box.append(h('p', { class: 'skeleton' }, S.loadErr ? '讀不到資料' : '讀取中…')); return; }
+    var list = S.entries.filter(function (e) { return e.date.slice(0, 7) === S.month; });
+    if (S.filter === 'open') list = list.filter(function (e) { return !e.settled; });
+    if (!list.length) {
+      box.append(h('div', { class: 'empty' }, S.filter === 'open' ? '這個月都結清了。' : '這個月還沒有帳。用上面的表單加第一筆。'));
+      return;
+    }
+    byDate(list, true).forEach(function (pair) {
+      var d = pair[0], es = pair[1];
+      var day = h('div', { class: 'day' },
+        h('div', { class: 'day-head' },
+          h('span', {}, h('strong', {}, md(d)), wk(d), relTag(d) ? ' · ' + relTag(d) : ''),
+          h('span', { class: 'sum' }, '$' + money(sum(es.filter(function (e) { return e._st !== 'removing'; }))))));
+      es.forEach(function (e) {
+        var st = e._st === 'queued' ? '未同步' : e._st === 'saving' ? '儲存中…' : e._st === 'removing' ? '刪除中…' : '';
+        var cls = 'entry' + (F.editing === e.id ? ' is-editing' : '') + (flashId === e.id ? ' flash' : '') + (e._st === 'removing' ? ' dim' : '');
+        day.append(h('div', { class: cls },
+          h('button', { type: 'button', class: 'entry-main', 'aria-label': '修改 ' + lineOf(e), onclick: function () { startEdit(e.id); } },
+            h('span', { class: 'entry-desc' }, e.desc),
+            h('span', { class: 'meta' },
+              h('span', { class: 'pill' }, e.cat),
+              h('span', { class: 'pill ' + (e.pay === '現金' ? 'cash' : 'card') }, e.pay),
+              e.pay === '現金' && e.who ? h('span', { class: 'pill ' + e.who }, e.who) : null,
+              st ? h('span', { class: 'pill sync' }, st) : null)),
+          h('span', { class: 'entry-amt' }, money(e.amt)),
+          h('button', { type: 'button', class: 'tin', 'aria-pressed': String(!!e.settled), disabled: e._st !== 'ok',
+            title: e.settled ? '已從鐵盒結清，點一下取消' : '還沒結清，點一下標成已結清',
+            onclick: function () {
+              var v = !e.settled;
+              setSettled([e], v).then(function () { toast(v ? '「' + e.desc + '」已結清' : '「' + e.desc + '」改回未結清'); }).catch(function () {});
+            } }, e.settled ? '✓ 結清' : '未結'),
+          h('button', { type: 'button', class: 'del', 'aria-label': '刪除 ' + e.desc, onclick: function () { removeEntry(e.id); } }, '×')));
+      });
+      box.append(day);
+    });
+  }
+  $('filtSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; S.filter = b.dataset.v; renderList(); });
+
+  // ---------- import ----------
+  function isDup(e) {
+    return S.entries.some(function (x) { return x.date === e.date && x.desc === e.desc && x.amt === e.amt && x.pay === e.pay; });
+  }
+  $('impParse').addEventListener('click', function () {
+    var text = $('impText').value;
+    if (!text.trim()) return;
+    var btn = $('impParse'); btn.disabled = true; btn.textContent = '檢查中…';
+    track(call('parse', { text: text, today: S.today })).then(function (r) {
+      S.imp = r.entries.map(function (e) { var d = isDup(e); return Object.assign(e, { dup: d, on: !d }); });
+      S.impErr = r.errors || [];
+    }).catch(function (err) { toast('檢查失敗：' + err.message); }).then(function () {
+      btn.disabled = false; btn.textContent = '檢查內容'; renderImport();
+    });
+  });
+  function renderImport() {
+    var box = $('impPrev'); box.textContent = '';
+    if (!S.imp) return;
+    if (S.impErr.length) {
+      box.append(h('p', { class: 'note' }, '下面幾行看不懂，不會匯入：'));
+      box.append(h('ul', { class: 'imp-err' }, S.impErr.map(function (x) { return h('li', {}, '第 ' + x.line + ' 行「' + x.text + '」：' + x.msg); })));
+    }
+    if (!S.imp.length) { box.append(h('p', { class: 'note' }, '沒有可以匯入的帳。')); return; }
+    var listEl = h('div', { class: 'imp-list' });
+    S.imp.forEach(function (e) {
+      var cb = h('input', { type: 'checkbox' }); cb.checked = e.on;
+      cb.addEventListener('change', function () { e.on = cb.checked; renderImport(); });
+      listEl.append(h('label', { class: 'imp-item' }, cb, h('span', {}, md(e.date) + ' ' + lineOf(e)), e.dup ? h('span', { class: 'dup' }, '可能重複') : null));
+    });
+    var n = S.imp.filter(function (e) { return e.on; }).length;
+    box.append(h('p', { class: 'note' }, '共 ' + S.imp.length + ' 筆' + (S.imp.some(function (e) { return e.dup; }) ? '，標「可能重複」的是試算表裡已經有一樣日期、用途、金額的帳，預設不勾' : '') + '。'));
+    box.append(listEl);
+    box.append(h('div', { class: 'actions' }, h('button', { type: 'button', class: 'primary', disabled: !n || !me, onclick: doImport }, me ? '匯入勾選的 ' + n + ' 筆' : '先在右上角選你是 M 還是 H')));
+  }
+  function doImport() {
+    var sel = S.imp.filter(function (e) { return e.on; });
+    sel.forEach(function (e) {
+      var n = { id: newId(), date: e.date, desc: e.desc, amt: e.amt, pay: e.pay, cat: e.cat, who: e.who, settled: false, by: me };
+      S.queue.push(n);
+      S.entries.push(Object.assign(strip(n), { _st: 'queued' }));
+    });
+    saveQ();
+    S.imp = null; S.impErr = []; $('impText').value = '';
+    if (sel.length) S.month = sel[sel.length - 1].date.slice(0, 7);
+    renderImport(); renderAll(); flush();
+    toast('匯入 ' + sel.length + ' 筆');
+  }
+
+  // ---------- me ----------
+  $('meSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    me = b.dataset.v; LS.set(MEKEY, me);
+    if (!F.editing && !F.desc) F.who = me;
+    renderAll(); if (S.imp) renderImport();
+    toast('現金預設記在 ' + me);
+  });
+
+  // ---------- status / toast ----------
+  function renderStatus() {
+    $('badLink').hidden = !CFG.bad;
+    var msg = '', btn = false, bad = false;
+    if (!CFG.ok || CFG.bad) { msg = ''; }
+    else if (S.loadErr && S.fromCache && S.lastLoad) { msg = '連不上試算表，先顯示 ' + hhmm(S.lastLoad) + ' 的資料（' + S.loadErr + '）'; btn = true; }
+    else if (S.loadErr) { msg = '讀不到試算表：' + S.loadErr; btn = true; bad = true; }
+    else if (S.queue.length && S.syncErr) { msg = '有 ' + S.queue.length + ' 筆還沒存進試算表（' + S.syncErr + '）。帳先留在這支手機，連上網會自動補上。'; btn = true; }
+    else if (!me) { msg = '先在右上角選你是 M 還是 H，記帳時會記下是誰記的。'; }
+    $('banner').hidden = !msg; $('banner').classList.toggle('bad', bad);
+    $('bannerMsg').textContent = msg; $('bannerBtn').hidden = !btn;
+    var busy = S.loading || S.syncing || S.inflight > 0;
+    $('reload').innerHTML = busy ? '<span class="spin">↻</span>' : '↻';
+    if (S.lastLoad) $('syncTime').textContent = hhmm(S.lastLoad) + ' 更新';
+    renderMore();
+    if (CFG.bad) $('installTip').hidden = true;
+  }
+  function hhmm(ms) {
+    var t = new Date(ms), d = iso(t);
+    return (d === iso(new Date()) ? '' : md(d) + ' ') + pad(t.getHours()) + ':' + pad(t.getMinutes());
+  }
+  function renderMore() {
+    var c = $('mConn');
+    c.className = 'v';
+    if (CFG.bad) { c.textContent = '通行碼不對'; c.classList.add('badc'); }
+    else if (S.loading && !S.lastLoad) c.textContent = '連線中…';
+    else if (S.loadErr) { c.textContent = '連不上（' + S.loadErr + '）'; c.classList.add('badc'); }
+    else if (S.lastLoad) { c.textContent = '已連線 · ' + hhmm(S.lastLoad) + ' 更新'; if (!S.fromCache) c.classList.add('okc'); }
+    else c.textContent = '—';
+    $('mQueue').textContent = S.queue.length ? S.queue.length + ' 筆，連上網會自動補送' : '沒有';
+    $('mInstall').textContent = standalone ? '已經從主畫面打開' : isIOS ? 'Safari 分享 → 加入主畫面' : '瀏覽器選單 → 加到主畫面';
+    var n = S.entries.filter(function (e) { return !e.settled && e._st !== 'removing'; }).length;
+    var b = $('tinBadge'); b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n);
+  }
+  $('bannerBtn').addEventListener('click', function () { if (S.loadErr) load(); else { S.syncErr = ''; flush(); } });
+  $('reload').addEventListener('click', function () { if (S.inflight || S.syncing) return; load(); });
+
+  var tTimer;
+  function toast(msg, undo) {
+    var t = $('toast'); $('toastMsg').textContent = msg;
+    var u = $('toastUndo'); u.hidden = !undo;
+    u.onclick = function () { t.hidden = true; if (undo) undo(); };
+    t.hidden = false; clearTimeout(tTimer);
+    tTimer = setTimeout(function () { t.hidden = true; }, undo ? 6000 : 2600);
+  }
+
+  function renderAll(flashId) {
+    setPressed($('meSeg'), me);
+    renderForm(); renderSummary(); renderSettle(); renderList(flashId); renderStatus();
+    saveCache();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - S.lastLoad > 20000 && !S.inflight && !S.syncing) load();
+  });
+  window.addEventListener('online', function () { S.syncErr = ''; flush(); });
+
+  // ---------- 分頁（手機） ----------
+  var TAB = 'add';
+  function setTab(t) {
+    TAB = t;
+    document.querySelectorAll('[data-tab]').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-tab') === t); });
+    $('tabbar').querySelectorAll('button').forEach(function (b) {
+      if (b.dataset.t === t) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+  }
+  $('tabbar').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.t === TAB) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    setTab(b.dataset.t); window.scrollTo(0, 0);
+  });
+
+  // ---------- 設定畫面 ----------
+  function showSetup(on) {
+    document.body.classList.toggle('setup-mode', on);
+    $('setupCancel').hidden = !CFG.ok;
+    $('setupErr').hidden = true;
+    if (on) window.scrollTo(0, 0);
+  }
+  $('setupGo').addEventListener('click', function () {
+    var c = parseCfg($('setupIn').value);
+    if (!c) { $('setupErr').textContent = '看不懂這條連結。請從試算表「設定」分頁 B12 或 B13 整條複製過來。'; $('setupErr').hidden = false; return; }
+    if (CFG.u && CFG.u !== c.u) LS.del(CACHEKEY);
+    LS.set(CFGKEY, c);
+    if (c.me) LS.set(MEKEY, c.me);
+    location.replace(cfgUrl(c));
+  });
+  $('setupCancel').addEventListener('click', function () { showSetup(false); });
+  $('mSetup').addEventListener('click', function () { $('setupIn').value = ''; showSetup(true); });
+  $('badFix').addEventListener('click', function () { $('setupIn').value = ''; showSetup(true); });
+  $('mReload').addEventListener('click', function () { if (S.inflight || S.syncing) return; load(); });
+  $('ver').textContent = 'MH 記帳本 v' + APP_VERSION;
+
+  // ---------- 加到主畫面的提示 ----------
+  var installEvt = null;
+  function renderInstall() {
+    var off = LS.get(TIPKEY, false) || standalone || !CFG.ok || CFG.bad;
+    var show = !off && (isIOS || installEvt);
+    $('installTip').hidden = !show;
+    if (!show) return;
+    $('installGo').hidden = !installEvt;
+    $('installMsg').innerHTML = installEvt ? '把記帳本裝到主畫面，像 App 一樣點開。'
+      : '想像 App 一樣點開：點 Safari 的分享 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="分享"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg> →「加入主畫面」。';
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; renderInstall(); });
+  $('installGo').addEventListener('click', function () {
+    if (!installEvt) return;
+    installEvt.prompt();
+    installEvt.userChoice.then(function () { installEvt = null; renderInstall(); });
+  });
+  $('installX').addEventListener('click', function () { LS.set(TIPKEY, true); renderInstall(); });
+
+  // ---------- 啟動：先秀上次的資料，再去試算表拿新的 ----------
+  var cache = CFG.ok ? LS.get(CACHEKEY, null) : null;
+  if (cache && Array.isArray(cache.entries)) {
+    S.budgets = cache.budgets || []; S.since = cache.since || '';
+    S.entries = cache.entries.map(function (e) { e._st = 'ok'; return e; });
+    S.loaded = true; S.fromCache = true; S.lastLoad = cache.at || 0;
+  }
+  var qids = {}; S.queue.forEach(function (e) { qids[e.id] = 1; });
+  S.entries = S.entries.filter(function (e) { return !qids[e.id]; })
+    .concat(S.queue.map(function (e) { var c = strip(e); c._st = 'queued'; return c; }));
+  showSetup(!CFG.ok);
+  setTab('add');
+  renderInstall();
+  renderAll();
+  if (CFG.ok) load();
+
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+})();
+</script>
+</body>
+</html>
